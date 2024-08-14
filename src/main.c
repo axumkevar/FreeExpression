@@ -22,6 +22,9 @@
  *
  */
 
+// new Machine Selection header
+#include "machine.h"
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
@@ -38,8 +41,6 @@
 #include "dial.h"
 #include "hpgl.h"
 #include "display.h"
-// new Machine Selection header
-#include "machine.h"
 void setup(void);
 
 
