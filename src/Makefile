@@ -1,6 +1,6 @@
 # Freecut: open firmware for Cricut Expression 1 devices.
 #
-# 
+#
 # MCU name
 MCU = atmega1281
 
@@ -8,26 +8,52 @@ MCU = atmega1281
 FORMAT = ihex
 
 # Target file name (without extension).
-TARGET = freecut
+TARGET = FreeExpression
 
 # Speed
 FCLK = 16000000UL
+# machine type
+MACHINE = EXPRESSION
+
+# LED Screen Dependencies
+U8G_SRC = m2u8
 
 # List C source files here. (C dependencies are automatically generated.)
-SRC = main.c usb.c lcd.c keypad.c timer.c stepper.c cli.c flash.c dial.c hpgl.c shvars.c scale.c
+SRC = main.c \
+cli.c \
+dial.c \
+display.c \
+display_lcd.c \
+display_oled.c \
+flash.c \
+g_code.c \
+hpgl.c \
+keypad.c \
+scale.c \
+serial.c \
+shvars.c \
+spi.c \
+stepper.c \
+timer.c \
+usb.c
 
-# Assembler sources 
-ASRC = 
+# Add source files for the libraries
+SRC += $(shell ls $(U8G_SRC)/*.c)
+
+# Assembler sources
+ASRC =
 
 # Optional compiler flags.
-CFLAGS  = -D$(MCU) $(TEST) $(CE) -Os -DFCLK=$(FCLK) -fpack-struct 
-CFLAGS += -fshort-enums -Wall -Werror -Wstrict-prototypes 
+CFLAGS  = -D$(MCU) $(TEST) $(CE) -Os -DFCLK=$(FCLK) -DF_CPU=$(FCLK) -DMACHINE_$(MACHINE) -I./$(U8G_SRC)
+CFLAGS += -fpack-struct -fshort-enums -ffunction-sections -fdata-sections -funsigned-char -funsigned-bitfields
+CFLAGS += -Wall -Wstrict-prototypes
+
 
 # Optional assembler flags.
-ASFLAGS = -Wa,-ahlms=$(<:.S=.lst),-gstabs 
+ASFLAGS = -Wa,-ahlms=$(<:.S=.lst),-gstabs
 
 # Optional linker flags.
-LDFLAGS = -Wl,-Map=$(TARGET).map,--cref
+LDFLAGS = -Wl,--gc-sections,-Map=$(TARGET).map,--cref
 
 # Additional libraries
 #
@@ -59,17 +85,17 @@ OBJ = $(ASRC:.S=.o) $(SRC:.c=.o)
 LST = $(ASRC:.S=.lst) $(SRC:.c=.lst)
 
 # Combine all necessary flags and optional flags. Add target processor to flags.
-ALL_CFLAGS = -mmcu=$(MCU) -I. $(CFLAGS) 
+ALL_CFLAGS = -mmcu=$(MCU) -I. $(CFLAGS)
 ALL_ASFLAGS = -mmcu=$(MCU) -I. -x assembler-with-cpp $(ASFLAGS)
 
 # Default target.
 all: $(TARGET).elf $(TARGET).hex $(TARGET).lss tags
 
-.PHONY: prog 
+.PHONY: prog
 
 #you may need to change this line to program your device
-prog: all 
-	avrdude -pm128 -cstk500v2 -b115200 -P/dev/ttyUSB0 -u -V -U flash:w:$(TARGET).hex:i 
+prog: all
+	avrdude -pm128 -cstk500v2 -b115200 -P/dev/ttyUSB0 -u -V -U flash:w:$(TARGET).hex:i
 
 # Create final output files (.hex) from ELF output file.
 %.hex: %.elf
@@ -125,7 +151,7 @@ clean :
 	rm -f logfile
 
 
-# Automatically generate C source code dependencies. 
+# Automatically generate C source code dependencies.
 # (Code originally taken from the GNU make user manual and modified (See README.txt Credits).)
 # Note that this will work with sh (bash) and sed that is shipped with WinAVR (see the SHELL variable defined above).
 # This may not work with other shells or other seds.
@@ -140,7 +166,7 @@ clean :
 
 
 # Listing of phony targets.
-.PHONY : all clean 
+.PHONY : all clean
 
 tags: *.[hc]
 	ctags *.[hc]
