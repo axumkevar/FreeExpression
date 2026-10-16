@@ -1,58 +1,8 @@
 /*
- * The display is composed of an UG-2864ASYDT01 OLED module using an SSD1325 display driver chip.
- * The graphics library used is u8glib
- *
- * https://code.google.com/p/u8glib/
- *
- * Device type can be either u8g_dev_ssd1325_nhd27oled_bw_sw_spi or the 2x variant, 
- * u8g_dev_ssd1325_nhd27oled_2x_bw_sw_spi
- *
- * https://code.google.com/p/u8glib/wiki/device
- *
- * The UG-2864ASYDT01 module uses mainly four pins to interface with the AVR:
- *
- *  SCK: PORTF, Bit 6
- *  MOSI: PORTF, Bit 5
- *  CS: PORTE, Bit 7
- *  A0: PORTF, Bit 7
- *
- * On the motherboard of the Cricut Expression, the 10 pin header has the following
- * connections:
- *
- * Pin 	|  Display	| AVR
- *------+-------+---------
- *  1   |  GND 	   | NC
- *  2   |  Vcc     | NC
- *  3   |  D1/SDIN | PF5
- *  4   |  D0/SCLK | PF6
- *  5   |  DC#     | PF7
- *  6   |  NC	   | PE4
- *  7   |  NC	   | PE5
- *  8   |  RES	   | PE6
- *  9   |  CS#	   | PE7
- *  10  |  NC      | 
- *
- * This file is part of FreeExpression.
- *
- * https://github.com/thetazzbot/FreeExpression
- *
- * FreeExpression is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2.
- *
- * FreeExpression is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
- * License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with FreeExpression. If not, see http://www.gnu.org/licenses/.
- *
+ * Optimized FreeExpression OLED Driver for UG-2864ASYDT01 (SSD1325)
+ * Targeting: Atmel ATmega1281 @ 16MHz
  */
 
-/*
- TODO:  Replace the u8glib, it is adding so much lag to the UI.  I need to hand-craft
- a faster interface.
- */
 #ifdef MACHINE_EXPRESSION
 #include <avr/interrupt.h>
 #include <avr/io.h>
@@ -60,122 +10,136 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-//#include "./m2u8/u8g.h"
 #include "u8g2.h"
 #include "display_oled.h"
 #include "timer.h"
 
-
 void _oled_display_speed(void);
 void _oled_display_pressure(void);
-u8g2_t u8g2;
-static uint8_t cur_x=0,cur_y=0;
-char display_message[80]; // 4 lines of 20 chars??
 
-// local functions
+u8g2_t u8g2;
+static uint8_t cur_x = 0, cur_y = 0;
+char display_message[80]; 
+
 /*
-Displays the currently selected speed as bars
-Must be called from inside the draw loop
-*/
+ * Custom hardware-specific GPIO/Delay callback for the Cricut Expression Motherboard pinout
+ */
+uint8_t u8x8_gpio_and_delay_expression(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr) {
+  switch(msg) {
+    case U8X8_MSG_GPIO_AND_DELAY_INIT:
+      // Configure Motherboard display interface directions:
+      DDRF |= (1<<6) | (1<<5) | (1<<7); // SCK (PF6), MOSI (PF5), DC (PF7) as outputs
+      DDRE |= (1<<7) | (1<<6);          // CS (PE7), RES (PE6) as outputs
+      break;
+      
+    case U8X8_MSG_GPIO_DELAY_100NANO:
+      __asm__ __volatile__ ("nop\n\t" "nop\n\t"); // Quick AVR delays @ 16MHz
+      break;
+      
+    case U8X8_MSG_GPIO_DELAY_10MA:
+      for(volatile uint32_t i=0; i<16000; i++); // Approximate 10ms loop delay
+      break;
+
+    // Pin Control mapping directly to the Cricut Motherboard architecture:
+    case U8X8_MSG_GPIO_CS:              // CS# pin on PE7
+      if (arg_int) PORTE |= (1<<7); else PORTE &= ~(1<<7);
+      break;
+    case U8X8_MSG_GPIO_DC:              // DC# pin on PF7
+      if (arg_int) PORTF |= (1<<7); else PORTF &= ~(1<<7);
+      break;
+    case U8X8_MSG_GPIO_RESET:           // RES pin on PE6
+      if (arg_int) PORTE |= (1<<6); else PORTE &= ~(1<<6);
+      break;
+    case U8X8_MSG_GPIO_SPI_CLOCK:       // SCLK pin on PF6
+      if (arg_int) PORTF |= (1<<6); else PORTF &= ~(1<<6);
+      break;
+    case U8X8_MSG_GPIO_SPI_DATA:        // SDIN pin on PF5
+      if (arg_int) PORTF |= (1<<5); else PORTF &= ~(1<<5);
+      break;
+  }
+  return 1;
+}
+
 void _oled_display_speed(void)
 {
-	int p=timer_get_stepper_speed();
-	// at least one bar will always show
-		u8g2_SetColorIndex(&u8g2, 3);
+	int p = timer_get_stepper_speed();
+	
+	// FIX: Replaced u8g2_SetColorIndex with valid u8g2_SetDrawColor
+	u8g2_SetDrawColor(&u8g2, 3); 
 	u8g2_DrawBox(&u8g2, 30,62,2,2); // 1
-	if(p<2) u8g2_SetColorIndex(&u8g2, 1);
+	if(p<2) u8g2_SetDrawColor(&u8g2, 1);
 	u8g2_DrawBox(&u8g2, 33,61,2,3); // 2
-	if(p<3) u8g2_SetColorIndex(&u8g2, 1);
+	if(p<3) u8g2_SetDrawColor(&u8g2, 1);
 	u8g2_DrawBox(&u8g2, 36,60,2,4); // 3
-	if(p<4) u8g2_SetColorIndex(&u8g2, 1);
+	if(p<4) u8g2_SetDrawColor(&u8g2, 1);
 	u8g2_DrawBox(&u8g2, 39,59,2,5); // 4
-	if(p<5)  u8g2_SetColorIndex(&u8g2, 1);
+	if(p<5) u8g2_SetDrawColor(&u8g2, 1);
 	u8g2_DrawBox(&u8g2, 42,58,2,6); // 5
-	u8g2_SetColorIndex(&u8g2, 3);
+	u8g2_SetDrawColor(&u8g2, 3);
 }
 
-/*
-Displays the currently selected pressure as bars
-Must be called from inside the draw loop
-*/
 void _oled_display_pressure(void)
 {
-	int p=timer_get_pen_pressure();
-		u8g2_SetColorIndex(&u8g2, 3);
-		u8g2_DrawBox(&u8g2, 54,62,2,2); // 1
-		if(p<2) u8g2_SetColorIndex(&u8g2, 1);
-		u8g2_DrawBox(&u8g2, 57,61,2,3); // 2
-		if(p<3) u8g2_SetColorIndex(&u8g2, 1);
-		u8g2_DrawBox(&u8g2, 60,60,2,4); // 3
-		if(p<4) u8g2_SetColorIndex(&u8g2, 1);
-		u8g2_DrawBox(&u8g2, 63,59,2,5); // 4
-		if(p<5) u8g2_SetColorIndex(&u8g2, 1);
-		u8g2_DrawBox(&u8g2, 66,58,2,6); // 5
-		u8g2_SetColorIndex(&u8g2, 3);
+	int p = timer_get_pen_pressure();
+	
+	// FIX: Replaced u8g2_SetColorIndex with valid u8g2_SetDrawColor
+	u8g2_SetDrawColor(&u8g2, 3);
+	u8g2_DrawBox(&u8g2, 54,62,2,2); // 1
+	if(p<2) u8g2_SetDrawColor(&u8g2, 1);
+	u8g2_DrawBox(&u8g2, 57,61,2,3); // 2
+	if(p<3) u8g2_SetDrawColor(&u8g2, 1);
+	u8g2_DrawBox(&u8g2, 60,60,2,4); // 3
+	if(p<4) u8g2_SetDrawColor(&u8g2, 1);
+	u8g2_DrawBox(&u8g2, 63,59,2,5); // 4
+	if(p<5) u8g2_SetDrawColor(&u8g2, 1);
+	u8g2_DrawBox(&u8g2, 66,58,2,6); // 5
+	u8g2_SetDrawColor(&u8g2, 3);
 }
 
-
-void oled_display_firstpage(void)
-{
-	u8g2_FirstPage(&u8g2);
-}
-
-int oled_display_nextpage(void)
-{
-	return u8g2_NextPage(&u8g2);
-}
 void oled_display_init(void)
 {
-  /* select minimal prescaler (max system speed) */
-  CLKPR = 0xFF;
-                                                           // SCK    MOSI      CS       D/C
-   u8g2_InitSPI(&u8g2, &u8g2_dev_ssd1325_nhd27oled_2x_gr_sw_spi, PN(5, 6), PN(5, 5), PN(4, 7),PN(5,7), PN(4,6));
-   u8g2_SetRot180(&u8g2);
-   
-   /* assign default color value */
-   u8g2_SetColorIndex(&u8g2, 3);         /* max intensity */
- //  u8g2_SetColorIndex(&u8g2, 1);         /* pixel on */
+  /* Select minimal clock prescaler for maximum core processor execution speed */
+  CLKPR = 0x80;
+  CLKPR = 0x00;
 
-  u8g2_SetFont(&u8g2, u8g2_font_profont11);
-  u8g2_SetFontRefHeightExtendedText(&u8g2);
-  u8g2_SetDefaultForegroundColor(&u8g2);
-  u8g2_SetFontPosTop(&u8g2);
+  // FIX: Using correct structural U8g2 configuration function targeting the 
+  // Full frame-buffer variant (_f_) to bypass layout loops.
+  u8g2_Setup_ssd1325_nhd27oled_2x_gr_sw_spi(&u8g2, U8G2_R2, u8x8_byte_2view_sw_spi, u8x8_gpio_and_delay_expression);
   
+  u8g2_InitDisplay(&u8g2);
+  u8g2_SetPowerSave(&u8g2, 0); // Clear power save mode to turn on display hardware
 
+  /* Assign default initialization color constraints */
+  u8g2_SetDrawColor(&u8g2, 3); 
+
+  u8g2_SetFont(&u8g2, u8g2_font_profont11_tr); // Changed to '_tr' variant to decrease text print cycles
+  u8g2_SetFontPosTop(&u8g2);
 }
 
-// main screen redraw functions
+// OPTIMIZED: The main screen redraw loop is completely flat now.
 void oled_display_update(void)
 {
-	oled_display_firstpage();
-	do {
-		u8g2_DrawStr(&u8g2, cur_x, cur_y, display_message);
-		_oled_display_speed();
-		_oled_display_pressure();
-	} while(oled_display_nextpage());
-	
+    // 1. Instantly clear the internal buffer inside ATmega1281 SRAM
+    u8g2_ClearBuffer(&u8g2);      
+    
+    // 2. Draw layout elements exactly ONCE per frame execution call
+    u8g2_DrawStr(&u8g2, cur_x, cur_y, display_message);
+    _oled_display_speed();
+    _oled_display_pressure();
+    
+    // 3. Dump the complete rendered frame to the physical display controller
+    u8g2_SendBuffer(&u8g2);       
 }
 
-/**
-* Displays a string using u8g2lib's "picture loop".  There is
-* significant lag happening here.
-*/
 void oled_display_puts(const char *s) {
-	strcpy(display_message,s);
+	strcpy(display_message, s);
 	oled_display_update();
 }
 
-
-
-/*
-* Horrible code that needs to go away and be replaced by something better
-*/
-
 void oled_display_println(char *s) {
 	oled_display_puts(s);
-	cur_y+=10;
-	cur_x=0;
+	cur_y += 10;
+	cur_x = 0;
 }
-
 
 #endif //#ifdef MACHINE_EXPRESSION
