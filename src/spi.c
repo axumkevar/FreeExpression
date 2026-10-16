@@ -46,7 +46,7 @@ SIGNAL(SIG_SPI)
 #endif
 
 // access routines
-void spiInit()
+/*void spiInit()
 {
 #ifdef __AVR_ATmega1281__
 	// setup SPI I/O pins
@@ -93,12 +93,57 @@ void spiInit()
 	sbi(SPCR, SPIE);
 	#endif
 }
-/*
 void spiSetBitrate(u08 spr)
 {
 	outb(SPCR, (inb(SPCR) & ((1<<SPR0)|(1<<SPR1))) | (spr&((1<<SPR0)|(1<<SPR1)))));
 }
 */
+// Gemini Recommended SPI Update
+
+void spiInit()
+{
+#ifdef __AVR_ATmega1281__
+    // Setup SPI I/O pins
+    sbi(PORTB, 1); // Set SCK hi
+    sbi(DDRB, 1);  // Set SCK as output
+    cbi(DDRB, 3);  // Set MISO as input
+    sbi(DDRB, 2);  // Set MOSI as output
+    sbi(DDRB, 0);  // SS must be output for Master mode to work
+#elif __AVR_ATmega8__
+    // ... (Keep Mega8 configuration as is)
+	    // setup SPI I/O pins
+    sbi(PORTB, 5);  // set SCK hi
+    sbi(DDRB, 5);   // set SCK as output
+    cbi(DDRB, 4);   // set MISO as input
+    sbi(DDRB, 3);   // set MOSI as output
+    sbi(DDRB, 2);   // SS must be output for Master mode to work
+#endif
+
+    // Setup SPI interface: Master mode
+    sbi(SPCR, MSTR);
+
+    // --- OPTIMIZATION: Max Clock Speed (F_CPU / 2 = 8 MHz) ---
+    cbi(SPCR, SPR0); // Clear SPR0
+    cbi(SPCR, SPR1); // Clear SPR1
+    sbi(SPSR, SPI2X); // Set Double Speed flag in status register
+
+    // Select Mode 3 (Keep original clock phase/polarity)
+    sbi(SPCR, CPHA);
+    sbi(SPCR, CPOL);
+
+    // --- OPTIMIZATION: Change from LSB to MSB First ---
+    // The SSD1325 natively expects MSB first. Turning off DORD 
+    // eliminates software bit-reversal cycles in the driver.
+    cbi(SPCR, DORD); 
+
+    // Enable SPI
+    sbi(SPCR, SPE);
+
+    // Clear status
+    inb(SPSR);
+}
+
+
 void spiSendByte(u08 data)
 {
 //	inb(SPSR);		// clear interrupt flag
