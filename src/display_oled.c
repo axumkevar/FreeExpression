@@ -60,14 +60,15 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include "./m2u8/u8g.h"
+//#include "./m2u8/u8g.h"
+#include "u8g2.h"
 #include "display_oled.h"
 #include "timer.h"
 
 
 void _oled_display_speed(void);
 void _oled_display_pressure(void);
-u8g_t u8g;
+u8g2_t u8g2;
 static uint8_t cur_x=0,cur_y=0;
 char display_message[80]; // 4 lines of 20 chars??
 
@@ -80,17 +81,17 @@ void _oled_display_speed(void)
 {
 	int p=timer_get_stepper_speed();
 	// at least one bar will always show
-		u8g_SetColorIndex(&u8g, 3);
-	u8g_DrawBox(&u8g, 30,62,2,2); // 1
-	if(p<2) u8g_SetColorIndex(&u8g, 1);
-	u8g_DrawBox(&u8g, 33,61,2,3); // 2
-	if(p<3) u8g_SetColorIndex(&u8g, 1);
-	u8g_DrawBox(&u8g, 36,60,2,4); // 3
-	if(p<4) u8g_SetColorIndex(&u8g, 1);
-	u8g_DrawBox(&u8g, 39,59,2,5); // 4
-	if(p<5)  u8g_SetColorIndex(&u8g, 1);
-	u8g_DrawBox(&u8g, 42,58,2,6); // 5
-	u8g_SetColorIndex(&u8g, 3);
+		u8g2_SetColorIndex(&u8g2, 3);
+	u8g2_DrawBox(&u8g2, 30,62,2,2); // 1
+	if(p<2) u8g2_SetColorIndex(&u8g2, 1);
+	u8g2_DrawBox(&u8g2, 33,61,2,3); // 2
+	if(p<3) u8g2_SetColorIndex(&u8g2, 1);
+	u8g2_DrawBox(&u8g2, 36,60,2,4); // 3
+	if(p<4) u8g2_SetColorIndex(&u8g2, 1);
+	u8g2_DrawBox(&u8g2, 39,59,2,5); // 4
+	if(p<5)  u8g2_SetColorIndex(&u8g2, 1);
+	u8g2_DrawBox(&u8g2, 42,58,2,6); // 5
+	u8g2_SetColorIndex(&u8g2, 3);
 }
 
 /*
@@ -100,45 +101,45 @@ Must be called from inside the draw loop
 void _oled_display_pressure(void)
 {
 	int p=timer_get_pen_pressure();
-		u8g_SetColorIndex(&u8g, 3);
-		u8g_DrawBox(&u8g, 54,62,2,2); // 1
-		if(p<2) u8g_SetColorIndex(&u8g, 1);
-		u8g_DrawBox(&u8g, 57,61,2,3); // 2
-		if(p<3) u8g_SetColorIndex(&u8g, 1);
-		u8g_DrawBox(&u8g, 60,60,2,4); // 3
-		if(p<4) u8g_SetColorIndex(&u8g, 1);
-		u8g_DrawBox(&u8g, 63,59,2,5); // 4
-		if(p<5) u8g_SetColorIndex(&u8g, 1);
-		u8g_DrawBox(&u8g, 66,58,2,6); // 5
-		u8g_SetColorIndex(&u8g, 3);
+		u8g2_SetColorIndex(&u8g2, 3);
+		u8g2_DrawBox(&u8g2, 54,62,2,2); // 1
+		if(p<2) u8g2_SetColorIndex(&u8g2, 1);
+		u8g2_DrawBox(&u8g2, 57,61,2,3); // 2
+		if(p<3) u8g2_SetColorIndex(&u8g2, 1);
+		u8g2_DrawBox(&u8g2, 60,60,2,4); // 3
+		if(p<4) u8g2_SetColorIndex(&u8g2, 1);
+		u8g2_DrawBox(&u8g2, 63,59,2,5); // 4
+		if(p<5) u8g2_SetColorIndex(&u8g2, 1);
+		u8g2_DrawBox(&u8g2, 66,58,2,6); // 5
+		u8g2_SetColorIndex(&u8g2, 3);
 }
 
 
 void oled_display_firstpage(void)
 {
-	u8g_FirstPage(&u8g);
+	u8g2_FirstPage(&u8g2);
 }
 
 int oled_display_nextpage(void)
 {
-	return u8g_NextPage(&u8g);
+	return u8g2_NextPage(&u8g2);
 }
 void oled_display_init(void)
 {
   /* select minimal prescaler (max system speed) */
   CLKPR = 0xFF;
                                                            // SCK    MOSI      CS       D/C
-   u8g_InitSPI(&u8g, &u8g_dev_ssd1325_nhd27oled_2x_gr_sw_spi, PN(5, 6), PN(5, 5), PN(4, 7),PN(5,7), PN(4,6));
-   u8g_SetRot180(&u8g);
+   u8g2_InitSPI(&u8g2, &u8g2_dev_ssd1325_nhd27oled_2x_gr_sw_spi, PN(5, 6), PN(5, 5), PN(4, 7),PN(5,7), PN(4,6));
+   u8g2_SetRot180(&u8g2);
    
    /* assign default color value */
-   u8g_SetColorIndex(&u8g, 3);         /* max intensity */
- //  u8g_SetColorIndex(&u8g, 1);         /* pixel on */
+   u8g2_SetColorIndex(&u8g2, 3);         /* max intensity */
+ //  u8g2_SetColorIndex(&u8g2, 1);         /* pixel on */
 
-  u8g_SetFont(&u8g, u8g_font_profont11);
-  u8g_SetFontRefHeightExtendedText(&u8g);
-  u8g_SetDefaultForegroundColor(&u8g);
-  u8g_SetFontPosTop(&u8g);
+  u8g2_SetFont(&u8g2, u8g2_font_profont11);
+  u8g2_SetFontRefHeightExtendedText(&u8g2);
+  u8g2_SetDefaultForegroundColor(&u8g2);
+  u8g2_SetFontPosTop(&u8g2);
   
 
 }
@@ -148,7 +149,7 @@ void oled_display_update(void)
 {
 	oled_display_firstpage();
 	do {
-		u8g_DrawStr(&u8g, cur_x, cur_y, display_message);
+		u8g2_DrawStr(&u8g2, cur_x, cur_y, display_message);
 		_oled_display_speed();
 		_oled_display_pressure();
 	} while(oled_display_nextpage());
@@ -156,7 +157,7 @@ void oled_display_update(void)
 }
 
 /**
-* Displays a string using u8glib's "picture loop".  There is
+* Displays a string using u8g2lib's "picture loop".  There is
 * significant lag happening here.
 */
 void oled_display_puts(const char *s) {
