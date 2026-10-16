@@ -61,7 +61,7 @@ void setup(void)
 	
 	msleep(100);
 	
-	//display_print(VERSION);
+	display_print(VERSION);
 	
 	usb_puts("\f");
 	usb_puts(VERSION);
@@ -72,24 +72,45 @@ void setup(void)
 int main( void )
 {
 	setup();
-	display_update();
+	
+	// Create a fast state counter to decouple screen refresh from the input checks
+	uint8_t display_divider = 0; 
+	
+	// Draw the starting state layout once immediately after initialization
+	oled_display_update(); 
+
     while( 1 )
     {
-        cli_poll( ); // polls ready bytes from USB  and processes them
+        // 1. ABSOLUTE HIGHEST PRIORITY: Process USB commands and G-code/HPGL movement steps.
+        cli_poll( ); 
 		wdt_reset( );
+		
+		// 2. TIMED TASK MANAGER: Executes every 40 milliseconds (25 Hz)
 		if( flag_25Hz )
 		{
 			flag_25Hz = 0;
 			
-			dial_poll( );  // polls the dials and processes their state
-			keypad_poll( ); // polls the keypad and executes functions
-			//display_update();
+			// Read pots/dials and check keypresses immediately
+			dial_poll( );  
+			keypad_poll( ); 
 
+			// --- DECOUPLED DISPLAY THROTTLING ---
+			// display_divider increments on every 40ms tick:
+			// 0 -> Skip (Run key/dial polls)
+			// 1 -> Trigger Screen Refresh -> Reset to 0
+			// This limits the screen to a comfortable ~12.5 FPS, clearing 
+			// up massive processing windows for the rest of your system tasks.
+			display_divider++;
+			if (display_divider >= 2)
+			{
+				display_divider = 0;
+				oled_display_update(); // Clears buffer, renders objects, and bursts data over SPI
+			}
 		}
+		
 		if( flag_Hz )
 		{
 			flag_Hz = 0;
 		}
     }
-	//return 0;
 }
