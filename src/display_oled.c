@@ -132,14 +132,14 @@ void oled_display_update(void)
 }
 
 void oled_display_puts(const char *s) {
-	strcpy(display_message, s);
-	oled_display_update();
+    // Safely cache text to local memory arrays without blocking machine executions
+    strncpy(display_message, s, sizeof(display_message) - 1);
 }
 
 void oled_display_println(char *s) {
-	oled_display_puts(s);
-	cur_y += 10;
-	cur_x = 0;
+    oled_display_puts(s);
+    cur_y += 10;
+    cur_x = 0;
 }
 
 #endif //#ifdef MACHINE_EXPRESSION
